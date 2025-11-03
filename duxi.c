@@ -8,7 +8,13 @@
 #include <string.h>
 #include <termios.h>
 
+#define DUXI_VER "0.0.1" 
+
 #define VT_ASK_CURSORPOS "\x1b[6n"
+#define VT_CURSOR_HOME "\x1b[H"
+#define VT_HIDE_CURSOR "\x1b[?25l"
+#define VT_SHOW_CURSOR "\x1b[?25h"
+#define VT_LINE_ERASE0 "\x1b[K"
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum KEYS {
@@ -17,11 +23,16 @@ enum KEYS {
 };
 
 struct termios old_termios;
+struct erow {
+
+};
 struct editor {
     int rawmode;
     int screencols;
     int screenrows;
     int running;
+
+    struct erow *erows;
 } E;
 
 #define EDITOR_INIT (struct editor) {0,0,0,1}
@@ -89,7 +100,7 @@ int terminalGetCursorPos(int *rx, int *cx){
 
 int terminalGetWindowSize(int *rx, int *cx){
     struct winsize ws;
-    if(ioctl(STDOUT_FILENO, TIOCSWINSZ, &ws) == -1 || ws.ws_col == 0){
+    if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0){
         int orig_row, orig_col, retval;
 
         retval = terminalGetCursorPos(&orig_row, &orig_col);
@@ -166,12 +177,58 @@ void abFree(struct abuf *ab){
     ab->len = 0;
 }
 
-/*** rendering ***/
-void editorRenderScreen(){
-    int i;
-    struct abuf ab = ABUF_INIT;
+void editorRenderWelcome(struct abuf *ab){
+    char welcome[40];
 
-    // TODO: implement
+    int welcomelen = snprintf(welcome, sizeof(welcome), 
+        "Duxi editor -- version %s", DUXI_VER);
+    if(welcomelen > E.screencols) {
+        welcomelen = E.screencols;
+        goto end;
+    }
+
+    int padding = (E.screencols - welcomelen)/2;
+    while(padding > 0){
+        abAppend(ab, " ", 1);
+        padding--;
+    }
+
+end:
+    abAppend(ab, welcome, welcomelen);
+}
+
+/*** file reading ***/
+
+/*** rendering ***/
+void editorDrawRows(struct abuf *ab){
+    int y;
+
+    for (y=0; y < E.screenrows; y++){
+        if(y == E.screenrows / 3) 
+            editorRenderWelcome(ab);
+        else 
+            abAppend(ab, "~", 1);
+
+        abAppend(ab, VT_LINE_ERASE0, 3);
+        if(y < E.screenrows-1) {
+            abAppend(ab, "\r\n", 2);
+        }
+    }
+}
+
+void editorRenderScreen(){
+    struct abuf ab = ABUF_INIT;
+    
+    abAppend(&ab, VT_HIDE_CURSOR, 6);
+    abAppend(&ab, VT_CURSOR_HOME, 3);
+
+    editorDrawRows(&ab);
+
+    abAppend(&ab, VT_CURSOR_HOME, 3);
+    abAppend(&ab, VT_SHOW_CURSOR, 6);
+
+    write(STDOUT_FILENO, ab.b, ab.len);
+    abFree(&ab);
 }
 
 int main(int argc, char **argv){
@@ -183,6 +240,8 @@ int main(int argc, char **argv){
         editorRenderScreen();
         editorProcessKey();
     }
+
+    terminalResetMode();
 
     return 0;
 }
