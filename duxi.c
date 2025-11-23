@@ -193,16 +193,6 @@ void editorInsertCharacter(){
     // get current row
     struct erow er = E.erows[E.cy+E.scrly];
 
-    int i = 0;
-    while(render_offset > 0){
-        if(er.str[i] == '\t'){
-            render_offset -= TAB_SIZE;
-        } else{
-            render_offset--;
-        }
-        i++;
-    }
-
     // render new text!
 }
 
@@ -264,11 +254,7 @@ void editorProcessKey(){
         E.cx++;
         break;
 
-    case 
-    
-    default:
-        editorInsertCharacter(c);
-        break;
+    default: break;
     }
 
     // controlla il cursor e' sopra il testo
